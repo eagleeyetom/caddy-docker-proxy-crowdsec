@@ -8,6 +8,8 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1' # Runs every Monday at 04:00 UTC
 
 env:
   REGISTRY: ghcr.io
