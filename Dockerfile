@@ -4,6 +4,10 @@ ARG BOUNCER_VERSION=0.13.1
 
 FROM caddy:${CADDY_VERSION}-builder-alpine AS builder
 
+# Inherit ARGs inside the build stage
+ARG CDP_VERSION
+ARG BOUNCER_VERSION
+
 RUN xcaddy build \
     --with github.com/lucaslorentz/caddy-docker-proxy/v2@v${CDP_VERSION} \
     --with github.com/caddy-dns/cloudflare \
