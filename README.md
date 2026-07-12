@@ -1,5 +1,7 @@
 # Caddy Docker Proxy + Cloudflare DNS + CrowdSec Bouncer
 
+[![GHCR Package](https://img.shields.io/badge/container-GHCR-blue?logo=github&style=flat-square)](https://github.com/eagleeyetom/caddy-docker-proxy-crowdsec/pkgs/container/caddy-docker-proxy-crowdsec)
+
 This repository hosts a multi-architecture (`linux/amd64`, `linux/arm64`) Docker image for **Caddy** containing:
 * **[caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy)**: Automatic Caddy configuration generation via Docker labels.
 * **[caddy-dns/cloudflare](https://github.com/caddy-dns/cloudflare)**: Support for Let's Encrypt / ZeroSSL DNS-01 challenges via Cloudflare API.
