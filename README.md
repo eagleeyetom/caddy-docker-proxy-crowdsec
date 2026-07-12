@@ -11,11 +11,36 @@ This repository hosts a multi-architecture (`linux/amd64`, `linux/arm64`) Docker
 
 ## 🚀 Quick Start
 
-### 1. Build and Run Configuration
+### 1. Docker Compose Configuration for Caddy
 
-Add global Caddy and CrowdSec settings to your services using Docker labels.
+Run Caddy using this image:
 
-#### Global Config Container Labels (e.g. on your `crowdsec` container)
+```yaml
+services:
+  caddy:
+    image: ghcr.io/eagleeyetom/caddy-docker-proxy-crowdsec:latest
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CADDY_INGRESS_NETWORKS: "caddy"
+      CF_DNS_API_TOKEN: "your-cloudflare-api-token"
+      DOCKER_HOST: "tcp://docker-proxy:2375"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    networks:
+      - caddy
+```
+
+### 2. Configure Service Labels
+
+Add global Caddy and CrowdSec settings using Docker labels (e.g. on your `crowdsec` container):
+
 ```yaml
 labels:
   caddy.crowdsec.api_url: "http://crowdsec:8080"
