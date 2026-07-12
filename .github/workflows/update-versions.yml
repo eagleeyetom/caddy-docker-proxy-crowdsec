@@ -1,0 +1,74 @@
+name: Check and Update Versions
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Run every day at midnight UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  update-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch latest versions
+        id: versions
+        run: |
+          # Get Caddy version (strip leading v)
+          CADDY_LATEST=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r .tag_name | sed 's/^v//')
+          # Get Caddy Docker Proxy version (strip leading v)
+          CDP_LATEST=$(curl -s https://api.github.com/repos/lucaslorentz/caddy-docker-proxy/releases/latest | jq -r .tag_name | sed 's/^v//')
+          # Get Crowdsec Bouncer version (strip leading v)
+          BOUNCER_LATEST=$(curl -s https://api.github.com/repos/hslatman/caddy-crowdsec-bouncer/releases/latest | jq -r .tag_name | sed 's/^v//')
+
+          echo "caddy=$CADDY_LATEST" >> $GITHUB_OUTPUT
+          echo "cdp=$CDP_LATEST" >> $GITHUB_OUTPUT
+          echo "bouncer=$BOUNCER_LATEST" >> $GITHUB_OUTPUT
+
+          echo "Latest Caddy: $CADDY_LATEST"
+          echo "Latest CDP: $CDP_LATEST"
+          echo "Latest Bouncer: $BOUNCER_LATEST"
+
+      - name: Update Dockerfile
+        id: update
+        run: |
+          CADDY="${{ steps.versions.outputs.caddy }}"
+          CDP="${{ steps.versions.outputs.cdp }}"
+          BOUNCER="${{ steps.versions.outputs.bouncer }}"
+
+          # Read current versions from Dockerfile
+          CURRENT_CADDY=$(grep -oP '^ARG CADDY_VERSION=\K.*' Dockerfile)
+          CURRENT_CDP=$(grep -oP '^ARG CDP_VERSION=\K.*' Dockerfile)
+          CURRENT_BOUNCER=$(grep -oP '^ARG BOUNCER_VERSION=\K.*' Dockerfile)
+
+          UPDATED=false
+
+          if [ "$CADDY" != "$CURRENT_CADDY" ] && [ ! -z "$CADDY" ]; then
+            sed -i "s/^ARG CADDY_VERSION=.*/ARG CADDY_VERSION=$CADDY/" Dockerfile
+            UPDATED=true
+          fi
+
+          if [ "$CDP" != "$CURRENT_CDP" ] && [ ! -z "$CDP" ]; then
+            sed -i "s/^ARG CDP_VERSION=.*/ARG CDP_VERSION=$CDP/" Dockerfile
+            UPDATED=true
+          fi
+
+          if [ "$BOUNCER" != "$CURRENT_BOUNCER" ] && [ ! -z "$BOUNCER" ]; then
+            sed -i "s/^ARG BOUNCER_VERSION=.*/ARG BOUNCER_VERSION=$BOUNCER/" Dockerfile
+            UPDATED=true
+          fi
+
+          echo "updated=$UPDATED" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Dockerfile
+          git commit -m "chore: bump versions in Dockerfile"
+          git push
