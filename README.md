@@ -7,6 +7,22 @@ This repository hosts a multi-architecture (`linux/amd64`, `linux/arm64`) Docker
 * **[caddy-dns/cloudflare](https://github.com/caddy-dns/cloudflare)**: Support for Let's Encrypt / ZeroSSL DNS-01 challenges via Cloudflare API.
 * **[caddy-crowdsec-bouncer](https://github.com/hslatman/caddy-crowdsec-bouncer)**: Real-time traffic filtering and malicious IP banning integrated with CrowdSec.
 
+> [!NOTE]
+> **Cloudflare** and **CrowdSec** integrations are pre-installed in the image binary, but using them is **completely optional**. You can use this image as a drop-in replacement for standard `caddy-docker-proxy`.
+
+---
+
+## ⚙️ Optional Integrations
+
+Both plugins are activated **only** when configured:
+
+* **Cloudflare DNS (`caddy-dns/cloudflare`)**:
+  * **Optional.** Used for DNS-01 challenge SSL certificate generation (e.g., for wildcard certificates or servers behind firewalls).
+  * If omitted, Caddy falls back to standard ACME HTTP-01 / TLS-ALPN-01 challenges or custom certificates.
+* **CrowdSec Bouncer (`caddy-crowdsec-bouncer`)**:
+  * **Optional.** Only filters traffic on routes where the `caddy.crowdsec` label is explicitly added.
+  * If omitted, Caddy operates as a normal reverse proxy without IP filtering.
+
 ---
 
 ## 🚀 Quick Start
@@ -27,7 +43,7 @@ services:
       - "443:443/udp"
     environment:
       CADDY_INGRESS_NETWORKS: "caddy"
-      CF_DNS_API_TOKEN: "your-cloudflare-api-token"
+      CF_DNS_API_TOKEN: "your-cloudflare-api-token" # Optional: Only if using Cloudflare DNS-01
       DOCKER_HOST: "tcp://docker-proxy:2375"
     volumes:
       - caddy_data:/data
@@ -39,8 +55,7 @@ services:
 
 ### 2. Configure Service Labels
 
-Add global Caddy and CrowdSec settings using Docker labels (e.g. on your `crowdsec` container):
-
+#### Optional: Global CrowdSec Bouncer Setup (e.g. on your `crowdsec` container)
 ```yaml
 labels:
   caddy.crowdsec.api_url: "http://crowdsec:8080"
@@ -48,16 +63,15 @@ labels:
   caddy.order: "crowdsec first"
 ```
 
-#### Protecting a Container (e.g. your app container)
-To enable the CrowdSec filter on a specific domain route, add the `caddy.crowdsec` label:
+#### Application Container Labels
 ```yaml
 labels:
   caddy: "app.yourdomain.com"
   caddy.reverse_proxy: "{{upstreams 80}}"
-  caddy.tls.dns: "cloudflare {env.CF_DNS_API_TOKEN}"
+  caddy.tls.dns: "cloudflare {env.CF_DNS_API_TOKEN}" # Optional: Only if using Cloudflare DNS-01
   caddy.log.output: "file /var/log/caddy/access.log"
   caddy.log.format: "json"
-  caddy.crowdsec: "" # Enables protection
+  caddy.crowdsec: "" # Optional: Enables CrowdSec protection for this route
 ```
 
 ---
