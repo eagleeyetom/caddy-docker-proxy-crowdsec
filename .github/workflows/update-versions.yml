@@ -17,11 +17,16 @@ jobs:
       tag_name: ${{ steps.update.outputs.tag_name }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Fetch latest versions
         id: versions
         run: |
+          # Fetch all remote tags to ensure tag existence check works reliably
+          git fetch --tags origin
+
           # Get Caddy version (strip leading v)
           CADDY_LATEST=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r .tag_name | sed 's/^v//')
           # Get Caddy Docker Proxy version (strip leading v)
@@ -67,8 +72,12 @@ jobs:
           fi
 
           TAG_NAME="v${CDP}"
-          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1 || git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q "$TAG_NAME"; then
             TAG_NAME="v${CDP}-caddy${CADDY}-bouncer${BOUNCER}"
+          fi
+
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1 || git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q "$TAG_NAME"; then
+            TAG_NAME="v${CDP}-caddy${CADDY}-bouncer${BOUNCER}-$(date +%Y%m%d%H%M%S)"
           fi
 
           echo "updated=$UPDATED" >> $GITHUB_OUTPUT
@@ -82,7 +91,8 @@ jobs:
           git add Dockerfile
           git commit -m "chore: bump versions in Dockerfile (${{ steps.update.outputs.tag_name }})"
           git tag "${{ steps.update.outputs.tag_name }}"
-          git push origin main --tags
+          git push origin main
+          git push origin "${{ steps.update.outputs.tag_name }}"
 
   publish-image:
     needs: update-versions
