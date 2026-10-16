@@ -23,16 +23,28 @@ jobs:
 
       - name: Fetch latest versions
         id: versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Fetch all remote tags to ensure tag existence check works reliably
           git fetch --tags origin
 
-          # Get Caddy version (strip leading v)
-          CADDY_LATEST=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r .tag_name | sed 's/^v//')
-          # Get Caddy Docker Proxy version (strip leading v)
-          CDP_LATEST=$(curl -s https://api.github.com/repos/lucaslorentz/caddy-docker-proxy/releases/latest | jq -r .tag_name | sed 's/^v//')
-          # Get Crowdsec Bouncer version (strip leading v)
-          BOUNCER_LATEST=$(curl -s https://api.github.com/repos/hslatman/caddy-crowdsec-bouncer/releases/latest | jq -r .tag_name | sed 's/^v//')
+          get_latest_release() {
+            local repo="$1"
+            local tag
+            # Use GitHub CLI with GITHUB_TOKEN to avoid unauthenticated API rate limits
+            tag=$(gh release view -R "$repo" --json tagName -q .tagName 2>/dev/null | sed 's/^v//')
+
+            if [ -z "$tag" ] || [ "$tag" = "null" ] || ! [[ "$tag" =~ ^[0-9]+ ]]; then
+              echo "Error: Failed to fetch valid release tag for '$repo' (got: '$tag')" >&2
+              return 1
+            fi
+            echo "$tag"
+          }
+
+          CADDY_LATEST=$(get_latest_release "caddyserver/caddy")
+          CDP_LATEST=$(get_latest_release "lucaslorentz/caddy-docker-proxy")
+          BOUNCER_LATEST=$(get_latest_release "hslatman/caddy-crowdsec-bouncer")
 
           echo "caddy=$CADDY_LATEST" >> $GITHUB_OUTPUT
           echo "cdp=$CDP_LATEST" >> $GITHUB_OUTPUT
@@ -49,6 +61,14 @@ jobs:
           CDP="${{ steps.versions.outputs.cdp }}"
           BOUNCER="${{ steps.versions.outputs.bouncer }}"
 
+          # Validate all variables before touching Dockerfile
+          for ver in "$CADDY" "$CDP" "$BOUNCER"; do
+            if [ -z "$ver" ] || [ "$ver" = "null" ] || ! [[ "$ver" =~ ^[0-9]+ ]]; then
+              echo "Error: Invalid version detected ('$ver'), aborting update." >&2
+              exit 1
+            fi
+          done
+
           # Read current versions from Dockerfile
           CURRENT_CADDY=$(grep -oP '^ARG CADDY_VERSION=\K.*' Dockerfile)
           CURRENT_CDP=$(grep -oP '^ARG CDP_VERSION=\K.*' Dockerfile)
@@ -56,17 +76,17 @@ jobs:
 
           UPDATED=false
 
-          if [ "$CADDY" != "$CURRENT_CADDY" ] && [ ! -z "$CADDY" ]; then
+          if [ "$CADDY" != "$CURRENT_CADDY" ]; then
             sed -i "s/^ARG CADDY_VERSION=.*/ARG CADDY_VERSION=$CADDY/" Dockerfile
             UPDATED=true
           fi
 
-          if [ "$CDP" != "$CURRENT_CDP" ] && [ ! -z "$CDP" ]; then
+          if [ "$CDP" != "$CURRENT_CDP" ]; then
             sed -i "s/^ARG CDP_VERSION=.*/ARG CDP_VERSION=$CDP/" Dockerfile
             UPDATED=true
           fi
 
-          if [ "$BOUNCER" != "$CURRENT_BOUNCER" ] && [ ! -z "$BOUNCER" ]; then
+          if [ "$BOUNCER" != "$CURRENT_BOUNCER" ]; then
             sed -i "s/^ARG BOUNCER_VERSION=.*/ARG BOUNCER_VERSION=$BOUNCER/" Dockerfile
             UPDATED=true
           fi
